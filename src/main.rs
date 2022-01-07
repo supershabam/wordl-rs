@@ -122,24 +122,13 @@ impl Debug for Wordl {
 impl Wordl {
     fn suggest(&self, upto: usize) -> Vec<String> {
         let mut v: Vec<String> = self.dictionary.iter().cloned().collect();
-        // TODO rank remaining valid words
         let freq = Wordl::make_char_frequency(self.dictionary.iter());
         let score = move |s: &String| {
             s.chars()
                 .enumerate()
                 .fold(0.0, |acc, (idx, c)| acc + freq[idx].rate(c))
         };
-        v.sort_by(|a, b| {
-            let sa = score(a);
-            let sb = score(b);
-            if sa == sb {
-                return Ordering::Equal;
-            } else if sa < sb {
-                return Ordering::Less;
-            } else {
-                return Ordering::Greater;
-            }
-        });
+        v.sort_by(|a, b| score(a).partial_cmp(&score(b)).unwrap_or(Ordering::Equal));
         v.into_iter().take(upto).collect()
     }
 

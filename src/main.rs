@@ -18,6 +18,7 @@ where
     Ok(io::BufReader::new(file).lines())
 }
 
+// https://www.powerlanguage.co.uk/wordle/
 fn main() {
     let mut w = Wordl::default();
     if let Ok(lines) = read_lines("./words.txt") {
@@ -30,39 +31,32 @@ fn main() {
     }
     let words = vec![
         [
-            Letter::Miss('z'),
-            Letter::Miss('o'),
-            Letter::Miss('w'),
-            Letter::Miss('i'),
-            Letter::Contains('e'),
-        ],
-        [
             Letter::Miss('a'),
             Letter::Miss('b'),
-            Letter::Hit('e'),
             Letter::Miss('a'),
-            Letter::Miss('m'),
+            Letter::Contains('c'),
+            Letter::Contains('i'),
         ],
         [
-            Letter::Miss('c'),
+            Letter::Contains('c'),
             Letter::Miss('h'),
-            Letter::Hit('e'),
-            Letter::Miss('c'),
-            Letter::Contains('k'),
+            Letter::Contains('i'),
+            Letter::Miss('e'),
+            Letter::Miss('f'),
         ],
         [
-            Letter::Hit('k'),
-            Letter::Hit('e'),
-            Letter::Hit('e'),
-            Letter::Miss('n'),
-            Letter::Hit('s'),
+            Letter::Miss('d'),
+            Letter::Hit('i'),
+            Letter::Hit('c'),
+            Letter::Miss('k'),
+            Letter::Miss('s'),
         ],
         [
-            Letter::Hit('k'),
-            Letter::Hit('e'),
-            Letter::Hit('e'),
-            Letter::Miss('n'),
-            Letter::Hit('s'),
+            Letter::Miss('l'),
+            Letter::Hit('i'),
+            Letter::Hit('c'),
+            Letter::Miss('i'),
+            Letter::Miss('t'),
         ],
     ];
     for word in words {
@@ -71,6 +65,9 @@ fn main() {
         }
         println!("guessing {:?}", word);
         w.guess(word);
+    }
+    for s in w.suggest(3) {
+        println!("suggestion: {}", s);
     }
     // while !w.solved() {
     // println!("wordl = {:?}", w);

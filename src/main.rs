@@ -170,6 +170,7 @@ impl Wordl {
                 w.iter()
                     .filter_map(|l| match l {
                         &Letter::Contains(c) => Some(c),
+                        &Letter::Hit(c) => Some(c),
                         _ => None,
                     })
                     .collect()

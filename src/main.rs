@@ -28,23 +28,67 @@ fn main() {
             }
         }
     }
-    while !w.solved() {
-        println!("wordl = {:?}", w);
-        let g = w.guess().expect("while generating next guess");
-        println!("guess={}", g);
-        println!("which indexes were exactly correct: [0, 1, 2, 3, 4] ");
-        let mut buffer = String::new();
-        io::stdin()
-            .read_line(&mut buffer)
-            .expect("while reading line");
-        w.markCorrectIndices(&buffer);
-        println!("which letters were present");
-        let mut buffer = String::new();
-        io::stdin()
-            .read_line(&mut buffer)
-            .expect("while reading line");
-        w.markNegatives(&buffer);
+    let words = vec![
+        [
+            Letter::Miss('z'),
+            Letter::Miss('o'),
+            Letter::Miss('w'),
+            Letter::Miss('i'),
+            Letter::Contains('e'),
+        ],
+        [
+            Letter::Miss('a'),
+            Letter::Miss('b'),
+            Letter::Hit('e'),
+            Letter::Miss('a'),
+            Letter::Miss('m'),
+        ],
+        [
+            Letter::Miss('c'),
+            Letter::Miss('h'),
+            Letter::Hit('e'),
+            Letter::Miss('c'),
+            Letter::Contains('k'),
+        ],
+        [
+            Letter::Hit('k'),
+            Letter::Hit('e'),
+            Letter::Hit('e'),
+            Letter::Miss('n'),
+            Letter::Hit('s'),
+        ],
+        [
+            Letter::Hit('k'),
+            Letter::Hit('e'),
+            Letter::Hit('e'),
+            Letter::Miss('n'),
+            Letter::Hit('s'),
+        ],
+    ];
+    for word in words {
+        for s in w.suggest(3) {
+            println!("suggestion: {}", s);
+        }
+        println!("guessing {:?}", word);
+        w.guess(word);
     }
+    // while !w.solved() {
+    // println!("wordl = {:?}", w);
+    // let g = w.guess().expect("while generating next guess");
+    // println!("guess={}", g);
+    // println!("which indexes were exactly correct: [0, 1, 2, 3, 4] ");
+    // let mut buffer = String::new();
+    // io::stdin()
+    //     .read_line(&mut buffer)
+    //     .expect("while reading line");
+    // w.markCorrectIndices(&buffer);
+    // println!("which letters were present");
+    // let mut buffer = String::new();
+    // io::stdin()
+    //     .read_line(&mut buffer)
+    //     .expect("while reading line");
+    // w.markNegatives(&buffer);
+    // }
 }
 
 #[derive(Debug)]
@@ -53,129 +97,133 @@ enum WordlError {
     IOError(io::Error),
 }
 
+#[derive(Debug)]
+enum Letter {
+    Hit(char),
+    Miss(char),
+    Contains(char),
+}
+
+type Word = [Letter; 5];
+
 struct Wordl {
-    word: [Option<char>; 5],
-    negatives: [BTreeSet<char>; 5],
     dictionary: BTreeSet<String>,
-    last: Option<String>,
+    guesses: Vec<Word>,
 }
 
 impl Debug for Wordl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Wordl")
-            .field("word", &self.word)
-            .field("negatives", &self.negatives)
-            .field("last", &self.last)
+            .field("guesses", &self.guesses)
             .finish()
     }
 }
 
 impl Wordl {
-    fn markCorrectIndices(&mut self, i: &str) {
-        let i = i.trim();
-        let last = self.last.as_ref().unwrap();
-        i.chars()
-            .map(|c| c.to_digit(10).unwrap() as usize)
-            .for_each(|i| {
-                self.word[i] = Some(last.chars().nth(i).unwrap());
-            });
+    fn suggest(&self, upto: usize) -> Vec<String> {
+        let mut v: Vec<String> = self.dictionary.iter().cloned().collect();
+        v.sort_by(|a, b| Ordering::Equal);
+        v.into_iter().take(upto).collect()
     }
 
-    fn markNegatives(&mut self, i: &str) {
-        let i = i.trim();
-        i.chars().for_each(|i| {
-            self.negatives.insert(i);
-        });
+    fn guess(&mut self, word: Word) {
+        self.guesses.push(word);
+        let guesses = &self.guesses;
+        let valid = Wordl::make_is_valid(guesses);
+        self.dictionary.retain(|k| valid(k));
     }
 
-    fn solved(&self) -> bool {
-        5 == self.word.iter().filter(|w| w.is_some()).count()
-    }
-
-    fn guess(&mut self) -> Result<String, WordlError> {
-        let a = {
-            let score = |a: &String| {
-                let o = self.overlaps(a);
-                let u = self.unique(a);
-                // depending on how many rounds remain, alter the strategy
-                // two strategies to consider: (a) find the most unique guesses, and (b) overlap with the most success
-                // let's do (a) for now.
-                // TODO add dictionary frequency counter
-                u * 5 + o
-            };
-            let a = self
-                .dictionary
-                .iter()
-                .filter(|a| {
-                    for (idx, w) in self.word.iter().enumerate() {
-                        if let Some(c) = w {
-                            let b = a
-                                .chars()
-                                .nth(idx)
-                                .expect("dictionary word was not as long as expected");
-                            if b != *c {
-                                return false;
-                            }
-                        }
-                    }
-                    true
-                })
-                .max_by(|a, b| {
-                    let sa = score(a);
-                    let sb = score(b);
-                    if sa == sb {
-                        Ordering::Equal
-                    } else if sa < sb {
-                        Ordering::Less
-                    } else {
-                        Ordering::Greater
-                    }
-                });
-            a
-        };
-        match a {
-            Some(s) => {
-                self.last = Some(s.clone());
-                // self.dictionary.remove(s); // TODO figure out how to satisfy the borrow checker here
-                Ok(s.clone())
-            }
-            None => Err(WordlError::GuessesExhausted),
-        }
-    }
-
-    // overlaps returns the number of characters in the provided string which match the known
-    // letters.
-    fn overlaps(&self, a: &str) -> u32 {
-        self.word.iter().zip(a.chars()).fold(0, |acc, (owc, ac)| {
-            if let Some(wc) = owc {
-                if *wc == ac {
-                    return acc + 1;
+    fn make_contains(words: &Vec<Word>) -> Vec<char> {
+        let instances: Vec<Vec<char>> = words
+            .iter()
+            .map(|w| {
+                w.iter()
+                    .filter_map(|l| match l {
+                        &Letter::Contains(c) => Some(c),
+                        _ => None,
+                    })
+                    .collect()
+            })
+            .collect();
+        let result: Vec<char> = instances.iter().fold(vec![], |mut acc, instance| {
+            let mut stack = acc.to_vec();
+            for c in instance {
+                if let Some(pos) = stack.iter().position(|s| *s == *c) {
+                    stack.remove(pos);
+                } else {
+                    acc.push(*c);
                 }
             }
             acc
-        })
+        });
+        result
     }
 
-    // unique returns the number of unique characters in the provided string a which have not
-    // been previously guessed.
-    fn unique(&self, a: &str) -> u32 {
-        let invalid: BTreeSet<char> = self
-            .word
-            .iter()
-            .filter_map(|w| {
-                if let Some(c) = w {
-                    return Some(*c);
+    fn make_hits(words: &Vec<Word>) -> [Option<char>; 5] {
+        let mut result = [None; 5];
+        for instance in words {
+            for (idx, l) in instance.iter().enumerate() {
+                if let Letter::Hit(c) = l {
+                    result[idx] = Some(*c);
                 }
-                None
+            }
+        }
+        result
+    }
+
+    fn make_excludes_at(words: &Vec<Word>) -> [BTreeSet<char>; 5] {
+        let mut result: [BTreeSet<char>; 5] = Default::default();
+        for instance in words {
+            for (idx, l) in instance.iter().enumerate() {
+                if let Letter::Contains(c) = l {
+                    result[idx].insert(*c);
+                }
+            }
+        }
+        result
+    }
+
+    fn make_is_valid(words: &Vec<Word>) -> Box<dyn Fn(&str) -> bool> {
+        // expect these characters to be present somewhere in the string exactly once
+        let contains = Wordl::make_contains(words);
+        // hits are where known expected values are
+        let hits = Wordl::make_hits(words);
+        // expect none of these characters to be present in the string
+        let excludes: BTreeSet<char> = words
+            .iter()
+            .flat_map(|word| word.iter())
+            .filter_map(|l| match l {
+                Letter::Miss(c) => Some(*c),
+                _ => None,
             })
             .collect();
-        let mut seen: BTreeSet<char> = BTreeSet::default();
-        a.chars().fold(0, |acc, c| {
-            if invalid.contains(&c) || self.negatives.contains(&c) || seen.contains(&c) {
-                return acc;
+        let excludes_at = Wordl::make_excludes_at(words);
+
+        Box::new(move |s: &str| -> bool {
+            let mut contains = contains.to_vec();
+            for (idx, c) in s.chars().enumerate() {
+                // must execute first to muate the contains vector for each char in s
+                if let Some(pos) = contains.iter().position(|cc| c == *cc) {
+                    contains.remove(pos);
+                }
+                // the subsequent predicates may be re-ordered for efficiency
+                if excludes.contains(&c) {
+                    return false;
+                }
+                if let Some(h) = hits[idx] {
+                    if h != c {
+                        return false;
+                    }
+                }
+                if excludes_at[idx].contains(&c) {
+                    return false;
+                }
             }
-            seen.insert(c);
-            acc + 1
+            if contains.len() > 0 {
+                return false;
+            }
+
+            true
         })
     }
 }
@@ -183,15 +231,92 @@ impl Wordl {
 impl Default for Wordl {
     fn default() -> Self {
         Wordl {
-            word: [None; 5],
-            negatives: [BTreeSet::default(); 5],
+            guesses: Vec::default(),
             dictionary: BTreeSet::default(),
-            last: None,
         }
     }
 }
 
-// guess: strep
-// greens?
-// yellows?
-// guess: {}
+#[cfg(test)]
+mod tests {
+    use crate::Letter;
+    use crate::Wordl;
+
+    #[test]
+    fn test_valid() {
+        let words = vec![
+            [
+                Letter::Miss('c'),
+                Letter::Miss('c'),
+                Letter::Contains('e'),
+                Letter::Miss('c'),
+                Letter::Miss('c'),
+            ],
+            [
+                Letter::Contains('e'),
+                Letter::Miss('c'),
+                Letter::Contains('g'),
+                Letter::Miss('c'),
+                Letter::Miss('c'),
+            ],
+            [
+                Letter::Contains('e'),
+                Letter::Contains('g'),
+                Letter::Contains('g'),
+                Letter::Miss('c'),
+                Letter::Miss('c'),
+            ],
+            [
+                Letter::Miss('c'),
+                Letter::Miss('c'),
+                Letter::Miss('e'),
+                Letter::Miss('c'),
+                Letter::Contains('y'),
+            ],
+        ];
+        let f = Wordl::make_is_valid(&words);
+        assert_eq!(f(&"match"), false);
+        assert_eq!(f(&"eggyy"), true);
+    }
+
+    #[test]
+    fn contains_creates_expected_vector() {
+        // _ _ E _ _
+        // E _ G _ _
+        // E G G _ _
+        // Y _ _ _ _
+        // -> EGGY
+
+        let words = vec![
+            [
+                Letter::Miss('c'),
+                Letter::Miss('c'),
+                Letter::Contains('e'),
+                Letter::Miss('c'),
+                Letter::Miss('c'),
+            ],
+            [
+                Letter::Contains('e'),
+                Letter::Miss('c'),
+                Letter::Contains('g'),
+                Letter::Miss('c'),
+                Letter::Miss('c'),
+            ],
+            [
+                Letter::Contains('e'),
+                Letter::Contains('g'),
+                Letter::Contains('g'),
+                Letter::Miss('c'),
+                Letter::Miss('c'),
+            ],
+            [
+                Letter::Miss('c'),
+                Letter::Miss('c'),
+                Letter::Miss('e'),
+                Letter::Miss('c'),
+                Letter::Contains('y'),
+            ],
+        ];
+        assert_eq!(Wordl::make_contains(&words), vec!['e', 'g', 'g', 'y']);
+    }
+}

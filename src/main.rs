@@ -95,6 +95,7 @@ impl Debug for Wordl {
 impl Wordl {
     fn suggest(&self, upto: usize) -> Vec<String> {
         let mut v: Vec<String> = self.dictionary.iter().cloned().collect();
+        // TODO rank remaining valid words
         v.sort_by(|a, b| Ordering::Equal);
         v.into_iter().take(upto).collect()
     }

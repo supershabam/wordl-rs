@@ -1,8 +1,6 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
-use std::result::Result;
-// https://github.com/charlesreid1/five-letter-words/blob/master/sgb-words.txt
 
 use std::fs::File;
 use std::io::{self, BufRead};
@@ -19,6 +17,7 @@ where
 }
 
 // https://www.powerlanguage.co.uk/wordle/
+// https://github.com/charlesreid1/five-letter-words/blob/master/sgb-words.txt
 fn main() {
     let mut w = Wordl::default();
     if let Ok(lines) = read_lines("./words.txt") {
@@ -69,29 +68,6 @@ fn main() {
     for s in w.suggest(3) {
         println!("suggestion: {}", s);
     }
-    // while !w.solved() {
-    // println!("wordl = {:?}", w);
-    // let g = w.guess().expect("while generating next guess");
-    // println!("guess={}", g);
-    // println!("which indexes were exactly correct: [0, 1, 2, 3, 4] ");
-    // let mut buffer = String::new();
-    // io::stdin()
-    //     .read_line(&mut buffer)
-    //     .expect("while reading line");
-    // w.markCorrectIndices(&buffer);
-    // println!("which letters were present");
-    // let mut buffer = String::new();
-    // io::stdin()
-    //     .read_line(&mut buffer)
-    //     .expect("while reading line");
-    // w.markNegatives(&buffer);
-    // }
-}
-
-#[derive(Debug)]
-enum WordlError {
-    GuessesExhausted,
-    IOError(io::Error),
 }
 
 #[derive(Debug)]

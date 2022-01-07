@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 
 use std::fs::File;
@@ -30,33 +30,40 @@ fn main() {
     }
     let words = vec![
         [
-            Letter::Miss('a'),
-            Letter::Miss('b'),
-            Letter::Miss('a'),
-            Letter::Contains('c'),
-            Letter::Contains('i'),
-        ],
-        [
-            Letter::Contains('c'),
-            Letter::Miss('h'),
-            Letter::Contains('i'),
             Letter::Miss('e'),
-            Letter::Miss('f'),
-        ],
-        [
-            Letter::Miss('d'),
-            Letter::Hit('i'),
-            Letter::Hit('c'),
-            Letter::Miss('k'),
-            Letter::Miss('s'),
-        ],
-        [
-            Letter::Miss('l'),
-            Letter::Hit('i'),
-            Letter::Hit('c'),
-            Letter::Miss('i'),
             Letter::Miss('t'),
+            Letter::Miss('h'),
+            Letter::Miss('y'),
+            Letter::Contains('l'),
         ],
+        [
+            Letter::Contains('l'),
+            Letter::Contains('u'),
+            Letter::Miss('b'),
+            Letter::Miss('r'),
+            Letter::Miss('a'),
+        ],
+        [
+            Letter::Hit('s'),
+            Letter::Miss('o'),
+            Letter::Contains('l'),
+            Letter::Contains('u'),
+            Letter::Contains('m'),
+        ],
+        // [
+        //     Letter::Miss('d'),
+        //     Letter::Hit('i'),
+        //     Letter::Hit('c'),
+        //     Letter::Miss('k'),
+        //     Letter::Miss('s'),
+        // ],
+        // [
+        //     Letter::Miss('l'),
+        //     Letter::Hit('i'),
+        //     Letter::Hit('c'),
+        //     Letter::Miss('i'),
+        //     Letter::Miss('t'),
+        // ],
     ];
     for word in words {
         for s in w.suggest(3) {
@@ -79,6 +86,26 @@ enum Letter {
 
 type Word = [Letter; 5];
 
+#[derive(Default, Debug)]
+struct CharFreq {
+    counts: BTreeMap<char, u32>,
+    total: u32,
+}
+
+impl CharFreq {
+    fn insert(&mut self, c: char) {
+        self.counts.entry(c).and_modify(|c| *c += 1).or_insert(1);
+        self.total += 1;
+    }
+
+    fn rate(&self, c: char) -> f64 {
+        match self.total {
+            0 => 0.0,
+            _ => *self.counts.get(&c).unwrap_or(&0) as f64 / self.total as f64,
+        }
+    }
+}
+
 struct Wordl {
     dictionary: BTreeSet<String>,
     guesses: Vec<Word>,
@@ -96,7 +123,23 @@ impl Wordl {
     fn suggest(&self, upto: usize) -> Vec<String> {
         let mut v: Vec<String> = self.dictionary.iter().cloned().collect();
         // TODO rank remaining valid words
-        v.sort_by(|a, b| Ordering::Equal);
+        let freq = Wordl::make_char_frequency(self.dictionary.iter());
+        let score = move |s: &String| {
+            s.chars()
+                .enumerate()
+                .fold(0.0, |acc, (idx, c)| acc + freq[idx].rate(c))
+        };
+        v.sort_by(|a, b| {
+            let sa = score(a);
+            let sb = score(b);
+            if sa == sb {
+                return Ordering::Equal;
+            } else if sa < sb {
+                return Ordering::Less;
+            } else {
+                return Ordering::Greater;
+            }
+        });
         v.into_iter().take(upto).collect()
     }
 
@@ -105,6 +148,19 @@ impl Wordl {
         let guesses = &self.guesses;
         let valid = Wordl::make_is_valid(guesses);
         self.dictionary.retain(|k| valid(k));
+    }
+
+    fn make_char_frequency<'a, I>(vals: I) -> [CharFreq; 5]
+    where
+        I: IntoIterator<Item = &'a String>,
+    {
+        let mut result: [CharFreq; 5] = Default::default();
+        for word in vals {
+            for (idx, c) in word.chars().enumerate() {
+                result[idx].insert(c);
+            }
+        }
+        result
     }
 
     fn make_contains(words: &Vec<Word>) -> Vec<char> {
